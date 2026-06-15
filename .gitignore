@@ -33,3 +33,25 @@ bin/
 obj/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Go
+quant-feed/quant-feed
+quant-feed/*.exe
+quant-feed/vendor/
+
+# Python 虚拟环境
+quant-calc/venv/
+quant-calc/env/
+quant-calc/.venv/
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# Docker 数据卷
+docker-data/
+*.sqlite
+*.db

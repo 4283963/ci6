@@ -1,0 +1,58 @@
+.risk-table-container {
+  overflow-x: auto;
+}
+
+.risk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.risk-table th,
+.risk-table td {
+  padding: 10px 12px;
+  text-align: center;
+  border-bottom: 1px solid #415a77;
+}
+
+.risk-table th {
+  background: rgba(65, 90, 119, 0.3);
+  color: #778da9;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.risk-table td {
+  color: #e0e1dd;
+  font-weight: 500;
+}
+
+.table-row:hover {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.sticky-col {
+  position: sticky;
+  left: 0;
+  background: #1b263b;
+  z-index: 2;
+}
+
+th.sticky-col {
+  z-index: 3;
+}
+
+.symbol-cell {
+  text-align: left;
+}
+
+.symbol-name {
+  font-weight: 700;
+  color: #00d4ff;
+  font-size: 13px;
+}
