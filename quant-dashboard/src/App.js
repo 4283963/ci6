@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import './App.css';
 import RiskRadar from './components/RiskRadar';
 import RiskTable from './components/RiskTable';
 import CorrelationMatrix from './components/CorrelationMatrix';
 import Header from './components/Header';
 import OverviewCards from './components/OverviewCards';
+import WeightPanel from './components/WeightPanel';
+import PortfolioChart from './components/PortfolioChart';
 import useWebSocket from './hooks/useWebSocket';
 
 const SYMBOLS = [
@@ -23,8 +25,12 @@ function App() {
   const [dataFreshness, setDataFreshness] = useState('unknown');
   const [staleSymbols, setStaleSymbols] = useState(new Set());
   const [errorBanner, setErrorBanner] = useState(null);
+  const [weights, setWeights] = useState({});
+  const [covarianceMatrix, setCovarianceMatrix] = useState(null);
+  const [portfolioData, setPortfolioData] = useState(null);
+  const [activeView, setActiveView] = useState('portfolio');
+  const [isLocalCalc, setIsLocalCalc] = useState(true);
 
-  const reconnectCountRef = useRef(0);
   const firstConnectRef = useRef(false);
 
   const handleMessage = useCallback((data) => {
@@ -41,9 +47,17 @@ function App() {
       }));
       setLastUpdate(now);
     }
+
+    if (data.type === 'portfolio_update' && data.data) {
+      setPortfolioData(data.data);
+      setIsLocalCalc(false);
+      if (data.data.covariance_matrix) {
+        setCovarianceMatrix(data.data.covariance_matrix);
+      }
+    }
   }, []);
 
-  const { status, reconnectCount } = useWebSocket('ws://localhost:8080/ws', handleMessage);
+  const { status, reconnectCount, sendMessage } = useWebSocket('ws://localhost:8080/ws', handleMessage);
 
   useEffect(() => {
     setConnectionStatus(status);
@@ -129,7 +143,37 @@ function App() {
     return () => clearInterval(interval);
   }, [riskData, lastUpdate, errorBanner]);
 
+  const handleWeightsChange = useCallback((newWeights) => {
+    setWeights(newWeights);
+    setIsLocalCalc(true);
+
+    if (status === 'connected') {
+      sendMessage({
+        type: 'weight_update',
+        weights: newWeights,
+        timestamp: Date.now()
+      });
+    }
+  }, [status, sendMessage]);
+
   const dismissBanner = () => setErrorBanner(null);
+
+  const avgCorrelation = useMemo(() => {
+    if (!covarianceMatrix || !Array.isArray(covarianceMatrix) || covarianceMatrix.length === 0) {
+      return 0.5;
+    }
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < covarianceMatrix.length; i++) {
+      for (let j = 0; j < covarianceMatrix.length; j++) {
+        if (i !== j) {
+          sum += covarianceMatrix[i][j] || 0;
+          count++;
+        }
+      }
+    }
+    return count > 0 ? sum / count : 0;
+  }, [covarianceMatrix]);
 
   return (
     <div className="app">
@@ -151,70 +195,109 @@ function App() {
         staleSymbolCount={staleSymbols.size}
       />
 
-      <main className="main-content">
-        <OverviewCards
-          riskData={riskData}
-          symbols={SYMBOLS}
-          dataFreshness={dataFreshness}
-        />
+      <main className="main-layout">
+        <aside className="left-panel">
+          <WeightPanel
+            onWeightsChange={handleWeightsChange}
+            riskData={riskData}
+          />
+        </aside>
 
-        <div className="dashboard-grid">
-          <div className={`panel radar-panel ${riskData[selectedSymbol]?.stale ? 'panel--stale' : ''}`}>
-            <h2 className="panel-title">
-              风险雷达图
-              {riskData[selectedSymbol]?.stale && (
-                <span className="panel-stale-badge">数据过期</span>
-              )}
-            </h2>
-            <div className="symbol-selector">
-              {SYMBOLS.map(symbol => (
-                <button
-                  key={symbol}
-                  className={`symbol-btn ${selectedSymbol === symbol ? 'active' : ''} ${staleSymbols.has(symbol) ? 'stale' : ''}`}
-                  onClick={() => setSelectedSymbol(symbol)}
-                  title={staleSymbols.has(symbol) ? '数据已过期' : '数据正常'}
-                >
-                  {symbol}
-                  {staleSymbols.has(symbol) && <span className="stale-dot" />}
-                </button>
-              ))}
-            </div>
-            <RiskRadar
-              data={riskData[selectedSymbol] || {}}
-              symbol={selectedSymbol}
-              isStale={staleSymbols.has(selectedSymbol)}
-            />
+        <section className="center-panel">
+          <div className="view-tabs">
+            <button
+              className={`view-tab ${activeView === 'portfolio' ? 'active' : ''}`}
+              onClick={() => setActiveView('portfolio')}
+            >
+              📊 组合分析
+            </button>
+            <button
+              className={`view-tab ${activeView === 'radar' ? 'active' : ''}`}
+              onClick={() => setActiveView('radar')}
+            >
+              🎯 资产雷达
+            </button>
           </div>
 
-          <div className={`panel matrix-panel ${dataFreshness === 'critical' ? 'panel--stale' : ''}`}>
+          {activeView === 'portfolio' && (
+            <>
+              <PortfolioChart
+                weights={weights}
+                riskData={riskData}
+                symbols={SYMBOLS}
+                covarianceMatrix={covarianceMatrix}
+                portfolioData={portfolioData}
+                isLocalCalc={isLocalCalc}
+              />
+
+              <OverviewCards
+                riskData={riskData}
+                symbols={SYMBOLS}
+                dataFreshness={dataFreshness}
+              />
+            </>
+          )}
+
+          {activeView === 'radar' && (
+            <div className="radar-grid">
+              <div className={`panel radar-panel ${riskData[selectedSymbol]?.stale ? 'panel--stale' : ''}`}>
+                <h2 className="panel-title">
+                  风险雷达图
+                  {riskData[selectedSymbol]?.stale && (
+                    <span className="panel-stale-badge">数据过期</span>
+                  )}
+                </h2>
+                <div className="symbol-selector">
+                  {SYMBOLS.map(symbol => (
+                    <button
+                      key={symbol}
+                      className={`symbol-btn ${selectedSymbol === symbol ? 'active' : ''} ${staleSymbols.has(symbol) ? 'stale' : ''}`}
+                      onClick={() => setSelectedSymbol(symbol)}
+                      title={staleSymbols.has(symbol) ? '数据已过期' : '数据正常'}
+                    >
+                      {symbol}
+                      {staleSymbols.has(symbol) && <span className="stale-dot" />}
+                    </button>
+                  ))}
+                </div>
+                <RiskRadar
+                  data={riskData[selectedSymbol] || {}}
+                  symbol={selectedSymbol}
+                  isStale={staleSymbols.has(selectedSymbol)}
+                />
+              </div>
+
+              <div className={`panel matrix-panel ${dataFreshness === 'critical' ? 'panel--stale' : ''}`}>
+                <h2 className="panel-title">
+                  资产相关性矩阵
+                  {dataFreshness === 'critical' && (
+                    <span className="panel-stale-badge">数据过期</span>
+                  )}
+                </h2>
+                <CorrelationMatrix
+                  riskData={riskData}
+                  symbols={SYMBOLS}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className={`panel table-panel ${dataFreshness === 'critical' ? 'panel--stale' : ''}`}>
             <h2 className="panel-title">
-              资产相关性矩阵
-              {dataFreshness === 'critical' && (
-                <span className="panel-stale-badge">数据过期</span>
+              风险因子明细
+              {staleSymbols.size > 0 && (
+                <span className="panel-stale-badge">
+                  {staleSymbols.size}/{SYMBOLS.length} 资产数据过期
+                </span>
               )}
             </h2>
-            <CorrelationMatrix
+            <RiskTable
               riskData={riskData}
               symbols={SYMBOLS}
+              staleSymbols={staleSymbols}
             />
           </div>
-        </div>
-
-        <div className={`panel table-panel ${dataFreshness === 'critical' ? 'panel--stale' : ''}`}>
-          <h2 className="panel-title">
-            风险因子明细
-            {staleSymbols.size > 0 && (
-              <span className="panel-stale-badge">
-                {staleSymbols.size}/{SYMBOLS.length} 资产数据过期
-              </span>
-            )}
-          </h2>
-          <RiskTable
-            riskData={riskData}
-            symbols={SYMBOLS}
-            staleSymbols={staleSymbols}
-          />
-        </div>
+        </section>
       </main>
     </div>
   );

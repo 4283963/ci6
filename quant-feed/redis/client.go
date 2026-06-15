@@ -196,3 +196,11 @@ func (c *Client) SetFeedHealth(status string, lagMs int64, pushIntervalMs int) e
 	jsonData, _ := json.Marshal(health)
 	return c.client.Set(c.ctx, "quant-feed:health", jsonData, 10*time.Second).Err()
 }
+
+func (c *Client) GetGoRedisClient() *goredis.Client {
+	return c.client
+}
+
+func (c *Client) GetContext() context.Context {
+	return c.ctx
+}

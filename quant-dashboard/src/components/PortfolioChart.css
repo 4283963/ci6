@@ -1,0 +1,149 @@
+.portfolio-chart {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "chart sidebar"
+    "contrib contrib";
+  gap: 16px;
+  padding: 20px;
+  background: rgba(27, 38, 59, 0.8);
+  border: 1px solid #415a77;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.chart-main {
+  grid-area: chart;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  margin-bottom: 8px;
+}
+
+.chart-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0e1dd;
+  margin: 0;
+}
+
+.chart-subtitle {
+  font-size: 11px;
+  color: #778da9;
+}
+
+.calc-badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.calc-badge--server {
+  background: rgba(0, 255, 136, 0.15);
+  color: #00ff88;
+  border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.calc-badge--local {
+  background: rgba(255, 204, 0, 0.15);
+  color: #ffcc00;
+  border: 1px solid rgba(255, 204, 0, 0.3);
+}
+
+.chart-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+}
+
+.metrics-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: rgba(65, 90, 119, 0.15);
+  border: 1px solid rgba(65, 90, 119, 0.5);
+  border-radius: 8px;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: #778da9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.metric-value.positive {
+  color: #00ff88;
+}
+
+.metric-value.negative {
+  color: #ff6b6b;
+}
+
+.metric-value.warning {
+  color: #ffcc00;
+}
+
+.metric-value.info {
+  color: #00d4ff;
+}
+
+.contribution-section {
+  grid-area: contrib;
+  padding-top: 12px;
+  border-top: 1px solid #415a77;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e1dd;
+  margin: 0 0 8px 0;
+}
+
+@media (max-width: 1200px) {
+  .portfolio-chart {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "chart"
+      "sidebar"
+      "contrib";
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -10,6 +10,7 @@ import (
 	"quant-feed/config"
 	"quant-feed/redis"
 
+	goredis "github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
 )
 
@@ -40,6 +41,18 @@ type RiskFactorData struct {
 	Data   map[string]float64 `json:"data"`
 }
 
+type WeightUpdateMessage struct {
+	Type      string             `json:"type"`
+	Weights   map[string]float64 `json:"weights"`
+	Timestamp int64              `json:"timestamp"`
+}
+
+type PortfolioUpdateMessage struct {
+	Type      string      `json:"type"`
+	Data      interface{} `json:"data"`
+	Timestamp int64       `json:"timestamp"`
+}
+
 func NewServer(cfg *config.Config, redisClient *redis.Client) *Server {
 	return &Server{
 		cfg:     cfg,
@@ -52,6 +65,7 @@ func NewServer(cfg *config.Config, redisClient *redis.Client) *Server {
 func (s *Server) Start() {
 	http.HandleFunc("/ws", s.handleWebSocket)
 	go s.broadcastRiskFactors()
+	go s.subscribePortfolioUpdates()
 
 	log.Printf("WebSocket server starting on %s", s.cfg.WebSocketPort)
 	if err := http.ListenAndServe(s.cfg.WebSocketPort, nil); err != nil {
@@ -77,7 +91,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	client := &Client{
 		conn: conn,
-		send: make(chan []byte, 256),
+		send: make(chan []byte, 512),
 	}
 
 	s.mu.Lock()
@@ -100,9 +114,96 @@ func (s *Server) readPump(client *Client) {
 	}()
 
 	for {
-		_, _, err := client.conn.ReadMessage()
+		_, message, err := client.conn.ReadMessage()
 		if err != nil {
 			break
+		}
+
+		s.handleClientMessage(message)
+	}
+}
+
+func (s *Server) handleClientMessage(rawMsg []byte) {
+	var baseMsg struct {
+		Type string `json:"type"`
+	}
+
+	if err := json.Unmarshal(rawMsg, &baseMsg); err != nil {
+		log.Printf("Failed to parse client message: %v", err)
+		return
+	}
+
+	switch baseMsg.Type {
+	case "weight_update":
+		var weightMsg WeightUpdateMessage
+		if err := json.Unmarshal(rawMsg, &weightMsg); err != nil {
+			log.Printf("Failed to parse weight_update message: %v", err)
+			return
+		}
+		s.forwardWeightUpdate(&weightMsg)
+
+	default:
+		log.Printf("Unknown message type from client: %s", baseMsg.Type)
+	}
+}
+
+func (s *Server) forwardWeightUpdate(msg *WeightUpdateMessage) {
+	if msg.Weights == nil || len(msg.Weights) == 0 {
+		return
+	}
+
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("Failed to marshal weight message: %v", err)
+		return
+	}
+
+	redisClient := s.redis.GetGoRedisClient()
+	ctx := s.redis.GetContext()
+
+	if err := redisClient.Publish(ctx, "channel:weights", jsonData).Err(); err != nil {
+		log.Printf("Failed to publish weight update to Redis: %v", err)
+	}
+}
+
+func (s *Server) subscribePortfolioUpdates() {
+	redisClient := s.redis.GetGoRedisClient()
+	ctx := s.redis.GetContext()
+
+	pubsub := redisClient.Subscribe(ctx, "channel:portfolio_update")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+
+	log.Println("Subscribed to portfolio updates")
+
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				log.Println("Portfolio update channel closed")
+				return
+			}
+			s.broadcastPortfolioUpdate([]byte(msg.Payload))
+		case <-s.stopCh:
+			return
+		}
+	}
+}
+
+func (s *Server) broadcastPortfolioUpdate(data []byte) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.clients) == 0 {
+		return
+	}
+
+	for client := range s.clients {
+		select {
+		case client.send <- data:
+		default:
+			log.Printf("Client send buffer full, dropping portfolio update")
 		}
 	}
 }
@@ -181,4 +282,8 @@ func (s *Server) Broadcast(message []byte) {
 		default:
 		}
 	}
+}
+
+func (s *Server) GetGoRedisClient() *goredis.Client {
+	return s.redis.GetGoRedisClient()
 }
