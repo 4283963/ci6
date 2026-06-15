@@ -132,3 +132,67 @@ func (c *Client) GetRiskFactors(symbol string) (map[string]float64, error) {
 func parseFloat(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
+
+type BackpressureStatus struct {
+	ConsumerLagMs   int64   `json:"consumer_lag_ms"`
+	LastUpdateAgeMs int64   `json:"last_update_age_ms"`
+	HealthStatus    string  `json:"health_status"`
+	DropRate        float64 `json:"drop_rate"`
+	ConsumerStale   bool    `json:"consumer_stale"`
+}
+
+func (c *Client) CheckConsumerBackpressure() BackpressureStatus {
+	now := time.Now().UnixNano() / int64(time.Millisecond)
+	status := BackpressureStatus{
+		HealthStatus: "healthy",
+	}
+
+	healthJSON, err := c.client.Get(c.ctx, "quant-calc:health").Result()
+	if err == nil && healthJSON != "" {
+		var health struct {
+			LastSuccessfulCalc float64 `json:"last_successful_calc"`
+			Status             string  `json:"status"`
+			DropRate           float64 `json:"drop_rate"`
+		}
+		if err := json.Unmarshal([]byte(healthJSON), &health); err == nil {
+			if health.LastSuccessfulCalc > 0 {
+				status.LastUpdateAgeMs = now - int64(health.LastSuccessfulCalc*1000)
+			}
+			if health.Status != "" {
+				status.HealthStatus = health.Status
+			}
+			status.DropRate = health.DropRate
+		}
+	}
+
+	status.ConsumerLagMs = status.LastUpdateAgeMs
+
+	if status.LastUpdateAgeMs > 5000 {
+		status.ConsumerStale = true
+		if status.HealthStatus == "healthy" {
+			status.HealthStatus = "degraded"
+		}
+	}
+	if status.LastUpdateAgeMs > 30000 {
+		status.HealthStatus = "critical"
+	}
+	if status.DropRate > 0.1 {
+		if status.HealthStatus == "healthy" {
+			status.HealthStatus = "degraded"
+		}
+	}
+
+	return status
+}
+
+func (c *Client) SetFeedHealth(status string, lagMs int64, pushIntervalMs int) error {
+	now := time.Now().UnixNano() / int64(time.Millisecond)
+	health := map[string]interface{}{
+		"status":           status,
+		"timestamp":        now,
+		"consumer_lag_ms":  lagMs,
+		"push_interval_ms": pushIntervalMs,
+	}
+	jsonData, _ := json.Marshal(health)
+	return c.client.Set(c.ctx, "quant-feed:health", jsonData, 10*time.Second).Err()
+}

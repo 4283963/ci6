@@ -172,35 +172,93 @@ class PortfolioRiskCalculator:
     def __init__(self, risk_calculator: RiskCalculator):
         self.risk_calculator = risk_calculator
 
+    def _align_and_stack_arrays(
+        self,
+        arrays: Dict[str, np.ndarray],
+        min_required: int = 2
+    ) -> Optional[Tuple[list, np.ndarray]]:
+        symbols = list(arrays.keys())
+        if len(symbols) == 0:
+            return None
+
+        valid_lengths = []
+        for symbol in symbols:
+            arr = arrays[symbol]
+            if arr is None or not isinstance(arr, np.ndarray):
+                valid_lengths.append(0)
+            elif arr.ndim != 1:
+                valid_lengths.append(0)
+            else:
+                valid_lengths.append(len(arr))
+
+        min_len = min(valid_lengths) if valid_lengths else 0
+        if min_len < min_required:
+            return None
+
+        aligned = []
+        for symbol in symbols:
+            arr = arrays[symbol]
+            sliced = arr[-min_len:].astype(np.float64)
+            if np.any(~np.isfinite(sliced)):
+                sliced = np.nan_to_num(sliced, nan=0.0, posinf=0.0, neginf=0.0)
+            aligned.append(sliced)
+
+        try:
+            stacked = np.vstack(aligned)
+            if stacked.ndim != 2 or stacked.shape[0] != len(symbols) or stacked.shape[1] != min_len:
+                return None
+            return symbols, stacked
+        except (ValueError, TypeError):
+            return None
+
     def calculate_covariance_matrix(self, returns_dict: Dict[str, np.ndarray]) -> np.ndarray:
         symbols = list(returns_dict.keys())
-        if len(symbols) == 0:
+        n = len(symbols)
+        if n == 0:
             return np.array([])
-        
-        min_len = min(len(r) for r in returns_dict.values())
-        if min_len < 2:
-            return np.zeros((len(symbols), len(symbols)))
-        
-        aligned_returns = []
-        for symbol in symbols:
-            aligned_returns.append(returns_dict[symbol][-min_len:])
-        
-        return np.cov(np.array(aligned_returns), ddof=1)
+
+        result = self._align_and_stack_arrays(returns_dict, min_required=2)
+        if result is None:
+            cov = np.eye(n) * 0.01
+            np.fill_diagonal(cov, 0.0)
+            return cov
+
+        _, stacked = result
+        try:
+            cov_matrix = np.cov(stacked, ddof=1)
+            if not np.all(np.isfinite(cov_matrix)):
+                cov_matrix = np.nan_to_num(cov_matrix, nan=0.0, posinf=0.0, neginf=0.0)
+                cov_matrix = (cov_matrix + cov_matrix.T) / 2
+            return cov_matrix
+        except (ValueError, TypeError, FloatingPointError) as e:
+            import logging
+            logging.getLogger("quant-calc").warning(f"np.cov failed, falling back to diag matrix: {e}")
+            variances = np.var(stacked, axis=1, ddof=1)
+            return np.diag(np.nan_to_num(variances, nan=0.01))
 
     def calculate_correlation_matrix(self, returns_dict: Dict[str, np.ndarray]) -> np.ndarray:
         symbols = list(returns_dict.keys())
-        if len(symbols) == 0:
+        n = len(symbols)
+        if n == 0:
             return np.array([])
-        
-        min_len = min(len(r) for r in returns_dict.values())
-        if min_len < 2:
-            return np.eye(len(symbols))
-        
-        aligned_returns = []
-        for symbol in symbols:
-            aligned_returns.append(returns_dict[symbol][-min_len:])
-        
-        return np.corrcoef(np.array(aligned_returns))
+
+        result = self._align_and_stack_arrays(returns_dict, min_required=3)
+        if result is None:
+            return np.eye(n)
+
+        _, stacked = result
+        try:
+            corr_matrix = np.corrcoef(stacked)
+            if not np.all(np.isfinite(corr_matrix)):
+                corr_matrix = np.nan_to_num(corr_matrix, nan=0.0, posinf=1.0, neginf=-1.0)
+                corr_matrix = (corr_matrix + corr_matrix.T) / 2
+                np.fill_diagonal(corr_matrix, 1.0)
+            np.clip(corr_matrix, -1.0, 1.0, out=corr_matrix)
+            return corr_matrix
+        except (ValueError, TypeError, FloatingPointError) as e:
+            import logging
+            logging.getLogger("quant-calc").warning(f"np.corrcoef failed, falling back to identity: {e}")
+            return np.eye(n)
 
     def calculate_portfolio_volatility(
         self,

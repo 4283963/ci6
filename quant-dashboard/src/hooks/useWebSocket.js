@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 function useWebSocket(url, onMessage) {
   const [status, setStatus] = useState('connecting');
+  const [reconnectCount, setReconnectCount] = useState(0);
   const wsRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
@@ -14,6 +15,7 @@ function useWebSocket(url, onMessage) {
       ws.onopen = () => {
         setStatus('connected');
         reconnectAttemptsRef.current = 0;
+        setReconnectCount(0);
       };
 
       ws.onmessage = (event) => {
@@ -48,6 +50,7 @@ function useWebSocket(url, onMessage) {
 
     const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
     reconnectAttemptsRef.current += 1;
+    setReconnectCount(reconnectAttemptsRef.current);
 
     reconnectTimerRef.current = setTimeout(() => {
       setStatus('connecting');
@@ -79,7 +82,8 @@ function useWebSocket(url, onMessage) {
   return {
     status,
     sendMessage,
-    isConnected: status === 'connected'
+    isConnected: status === 'connected',
+    reconnectCount
   };
 }
 

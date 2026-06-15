@@ -32,7 +32,7 @@ function getValueColor(value, invert) {
   return isPositive ? '#00ff88' : '#ff4444';
 }
 
-function RiskTable({ riskData, symbols }) {
+function RiskTable({ riskData, symbols, staleSymbols = new Set() }) {
   return (
     <div className="risk-table-container">
       <table className="risk-table">
@@ -47,14 +47,24 @@ function RiskTable({ riskData, symbols }) {
         <tbody>
           {symbols.map(symbol => {
             const data = riskData[symbol] || {};
+            const isStale = staleSymbols.has(symbol) || data.stale;
             return (
-              <tr key={symbol} className="table-row">
+              <tr
+                key={symbol}
+                className={`table-row ${isStale ? 'table-row--stale' : ''}`}
+              >
                 <td className="sticky-col symbol-cell">
                   <span className="symbol-name">{symbol}</span>
+                  {isStale && <span className="stale-indicator" title="数据过期" />}
                 </td>
                 {FACTOR_CONFIG.map(factor => (
                   <td key={factor.key}>
-                    <span style={{ color: getValueColor(data[factor.key], factor.invert) }}>
+                    <span
+                      style={{
+                        color: isStale ? '#778da9' : getValueColor(data[factor.key], factor.invert),
+                        opacity: isStale ? 0.6 : 1
+                      }}
+                    >
                       {formatValue(data[factor.key], factor.format, factor.decimals)}
                     </span>
                   </td>

@@ -5,6 +5,108 @@
   background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
 }
 
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.error-banner--error {
+  background: linear-gradient(90deg, rgba(255, 68, 68, 0.2) 0%, rgba(255, 68, 68, 0.1) 100%);
+  color: #ff6b6b;
+  border-bottom: 1px solid rgba(255, 68, 68, 0.3);
+}
+
+.error-banner--warning {
+  background: linear-gradient(90deg, rgba(255, 204, 0, 0.2) 0%, rgba(255, 204, 0, 0.1) 100%);
+  color: #ffcc00;
+  border-bottom: 1px solid rgba(255, 204, 0, 0.3);
+}
+
+.error-banner__icon {
+  font-size: 18px;
+}
+
+.error-banner__message {
+  flex: 1;
+}
+
+.error-banner__close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.error-banner__close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.panel--stale {
+  border-color: rgba(255, 204, 0, 0.5) !important;
+  box-shadow: 0 0 20px rgba(255, 204, 0, 0.1);
+}
+
+.panel-stale-badge {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 3px 10px;
+  background: rgba(255, 204, 0, 0.2);
+  color: #ffcc00;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 204, 0, 0.3);
+}
+
+.symbol-btn.stale {
+  position: relative;
+  opacity: 0.7;
+  border-color: rgba(255, 204, 0, 0.5);
+}
+
+.stale-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  background: #ffcc00;
+  border-radius: 50%;
+  animation: pulseYellow 2s infinite;
+}
+
+@keyframes pulseYellow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 4px #ffcc00;
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 8px #ffcc00;
+  }
+}
+
 .main-content {
   flex: 1;
   padding: 20px;

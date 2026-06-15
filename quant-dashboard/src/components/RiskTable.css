@@ -56,3 +56,22 @@ th.sticky-col {
   color: #00d4ff;
   font-size: 13px;
 }
+
+.table-row--stale {
+  background: rgba(255, 204, 0, 0.03);
+}
+
+.table-row--stale:hover {
+  background: rgba(255, 204, 0, 0.08);
+}
+
+.stale-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  background: #ffcc00;
+  border-radius: 50%;
+  animation: pulseYellow 2s infinite;
+  vertical-align: middle;
+}
